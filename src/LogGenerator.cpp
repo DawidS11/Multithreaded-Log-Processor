@@ -46,6 +46,9 @@ std::string LineGenerator::next() {
 }
 
 void generate_log(std::ostream& out, const GenOptions& opts) {
+    // Line example:
+    // 10.0.0.5 - - [24/Oct/2025:10:00:04 +0000] "GET /login HTTP/1.1" 500 1024 1800
+
     LineGenerator gen{opts.start};
 
     // Write the requested number of lines.
