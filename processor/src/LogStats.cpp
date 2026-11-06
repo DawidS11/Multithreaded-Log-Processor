@@ -3,10 +3,50 @@
 #include <algorithm>
 #include <print>
 #include <string>
+#include <queue>
 
 namespace logproc {
 
+template <typename T>
+class BoundedQueue {
+public:
+    
+    bool push(T batch) {
+        if(data_.size() >= capacity_ || closed_) {
+            return false;
+        }
+        data_.push(std::move(batch));
+        return true;
+    }
+
+    std::optional<T> pop() {
+        if(data_.empty()) {
+            return {};
+        }
+        T first = std::move(data_.front());
+        data_.pop();
+        return first;
+    }
+
+    void close() {
+        closed_ = true;
+    }
+
+    bool closed() const {
+        return closed_;
+    }
+
+private:
+    std::queue<T> data_;
+    std::size_t capacity_ = 10;
+    bool closed_ = false;
+};
+
 void Stats::add_line(std::string_view line) {
+
+    // Push to the queue here.
+    // queue.push(std::move(batch));
+
     ++lines;
 
     const auto result = parse_line(line);
