@@ -9,3 +9,9 @@ target_link_libraries(logproc PRIVATE logproc_core)
 add_executable(logparser_tests tests/LogParserTest.cpp)
 target_link_libraries(logparser_tests PRIVATE logproc_core logproc_gen GTest::gtest_main)
 gtest_discover_tests(logparser_tests)
+
+# BoundedQueueTest tests
+add_executable(queue_tests tests/BoundedQueueTest.cpp)
+target_include_directories(queue_tests PRIVATE include)
+target_link_libraries(queue_tests PRIVATE GTest::gtest_main)
+gtest_discover_tests(queue_tests)
