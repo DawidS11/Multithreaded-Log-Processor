@@ -46,8 +46,11 @@ std::string LineGenerator::next() {
     // Fixed response size, in bytes. Apache writes "-" when no body was sent, such as a 304.
     const std::string bytes = status == 304 ? "-" : "1024";
 
-    // Latency cycles from 1.0 ms to 10.8 ms, stored in microseconds (Apache's %D field).
-    const std::uint64_t latency = 1000 + (i % 50) * 200;
+    // 90% of requests are fast; the rest form a 10–100 ms tail. Values are microseconds.
+    const std::uint64_t latencySlot = i % 100;
+    const std::uint64_t latency = latencySlot < 90
+        ? 1000 + (latencySlot % 50) * 200
+        : 10'000 + (latencySlot - 90) * 10'000;
 
     // Apache combined log format, with the latency (%D) appended as the last field.
     return std::format("{} - - [{:%d/%b/%Y:%H:%M:%S} +0000] \"{} {} HTTP/1.1\" {} {} \"{}\" \"{}\" {}",

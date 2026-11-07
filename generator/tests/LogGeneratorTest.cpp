@@ -56,12 +56,12 @@ TEST(LogGenTest, FirstLineHasStartTimestamp) {
     EXPECT_NE(lines[0].find("[24/Oct/2026:10:15:32 +0000]"), std::string::npos) << lines[0];
 }
 
-TEST(LogGenTest, TimestampAdvancesOneSecondPerLine) {
-    const auto lines = splitLines(generate(3));
-    ASSERT_EQ(lines.size(), 3u);
+TEST(LogGenTest, TimestampAdvancesEveryFiveThousandLines) {
+    const auto lines = splitLines(generate(10'001));
+    ASSERT_EQ(lines.size(), 10'001u);
     EXPECT_NE(lines[0].find(":32 +0000]"), std::string::npos) << lines[0];
-    EXPECT_NE(lines[1].find(":33 +0000]"), std::string::npos) << lines[1];
-    EXPECT_NE(lines[2].find(":34 +0000]"), std::string::npos) << lines[2];
+    EXPECT_NE(lines[5'000].find(":33 +0000]"), std::string::npos) << lines[5'000];
+    EXPECT_NE(lines[10'000].find(":34 +0000]"), std::string::npos) << lines[10'000];
 }
 
 TEST(LogGenTest, EveryLineMatchesApacheStyleFormat) {
@@ -83,7 +83,7 @@ TEST(LogGenTest, FieldsAreInExpectedRanges) {
 
         EXPECT_TRUE(allowed.contains(status)) << "status " << status;
         EXPECT_GE(latency, 1000ul);
-        EXPECT_LE(latency, 10800ul);
+        EXPECT_LE(latency, 100000ul);
     }
 }
 
