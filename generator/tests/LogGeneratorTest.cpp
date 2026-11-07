@@ -18,8 +18,8 @@ const sys_seconds kStart =
 
 // Matches: 10.0.0.1 - - [24/Oct/2026:10:15:32 +0000] "GET /api/users HTTP/1.1" 200 1024 1000
 const std::regex kLineRe(
-    R"(^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) - - \[(\d{2}/[A-Z][a-z]{2}/\d{4}:\d{2}:\d{2}:\d{2}) \+0000\] )"
-    R"("(GET|POST|PUT|DELETE) (\S+) HTTP/1\.1" (\d{3}) (\d+) (\d+)$)");
+    R"RE(^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) - - \[(\d{2}/[A-Z][a-z]{2}/\d{4}:\d{2}:\d{2}:\d{2}) \+0000\] )RE"
+    R"RE("(GET|POST|PUT|DELETE) (\S+) HTTP/1\.1" (\d{3}) (\d+|-) "([^"]*)" "([^"]*)" (\d+)$)RE");
 
 std::vector<std::string> splitLines(const std::string& text) {
     std::vector<std::string> lines;
@@ -72,14 +72,14 @@ TEST(LogGenTest, EveryLineMatchesApacheStyleFormat) {
 }
 
 TEST(LogGenTest, FieldsAreInExpectedRanges) {
-    const std::set<int> allowed{200, 201, 301, 404, 500};
+    const std::set<int> allowed{200, 201, 301, 304, 404, 500};
 
     for (const auto& line : splitLines(generate(1000))) {
         std::smatch m;
         ASSERT_TRUE(std::regex_match(line, m, kLineRe)) << line;
 
         const int status = std::stoi(m[5]);
-        const unsigned long latency = std::stoul(m[7]);
+        const unsigned long latency = std::stoul(m[9]);
 
         EXPECT_TRUE(allowed.contains(status)) << "status " << status;
         EXPECT_GE(latency, 1000ul);
@@ -94,7 +94,7 @@ TEST(LogGenTest, AllStatusCodesAppear) {
         ASSERT_TRUE(std::regex_match(line, m, kLineRe));
         seen.insert(std::stoi(m[5]));
     }
-    EXPECT_EQ(seen, (std::set<int>{200, 201, 301, 404, 500}));
+    EXPECT_EQ(seen, (std::set<int>{200, 201, 301, 304, 404, 500}));
 }
 
 TEST(LogGenTest, LineGeneratorMatchesGenerateLog) {
