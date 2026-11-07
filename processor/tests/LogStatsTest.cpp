@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <numeric>
 #include <sstream>
 #include <string>
 
@@ -56,6 +57,41 @@ TEST(LogStatsPipelineTest, CountsMalformedLineAcrossWorkers) {
     EXPECT_EQ(stats.lines, kLines + 1);
     EXPECT_EQ(stats.parsed, kLines);
     EXPECT_EQ(stats.malformed, 1u);
+}
+
+TEST(LogStatsPipelineTest, TracksLatencyHistogram) {
+    std::istringstream in{
+        R"(10.0.0.1 - - [24/Oct/2026:10:15:32 +0000] "GET /one HTTP/1.1" 200 10 1000
+10.0.0.2 - - [24/Oct/2026:10:15:33 +0000] "GET /two HTTP/1.1" 200 10 1200
+10.0.0.3 - - [24/Oct/2026:10:15:34 +0000] "GET /three HTTP/1.1" 200 10 3000
+10.0.0.4 - - [24/Oct/2026:10:15:35 +0000] "GET /four HTTP/1.1" 200 10 7000
+)"};
+
+    const auto stats = logproc::analyzeWithoutThreads(in);
+    const auto totalHistogram = std::accumulate(stats.latencyHistogram.begin(), stats.latencyHistogram.end(), std::uint64_t{0},
+                                                [](std::uint64_t sum, const auto& entry) {
+                                                    return sum + entry.second;
+                                                });
+    EXPECT_EQ(totalHistogram, stats.parsed);
+    EXPECT_FALSE(stats.latencyHistogram.empty());
+}
+
+TEST(LogStatsPipelineTest, ReportsDistinctTailLatencyPercentiles) {
+    std::istringstream in{makeLog(10'000)};
+    const auto stats = logproc::analyzeWithoutThreads(in);
+    std::ostringstream report;
+    logproc::printReport(report, stats);
+
+    const std::string reportText = report.str();
+    const auto p95Start = reportText.find("  p95:");
+    const auto p99Start = reportText.find("  p99:");
+    ASSERT_NE(p95Start, std::string::npos);
+    ASSERT_NE(p99Start, std::string::npos);
+
+    const auto p95End = reportText.find('\n', p95Start);
+    const auto p99End = reportText.find('\n', p99Start);
+    EXPECT_NE(reportText.substr(p95Start, p95End - p95Start),
+              reportText.substr(p99Start, p99End - p99Start));
 }
 
 TEST(LogStatsPipelineTest, GroupsRequestsByMinute) {

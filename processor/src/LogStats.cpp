@@ -1,8 +1,10 @@
 #include "LogStats.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <istream>
 #include <map>
+#include <numeric>
 #include <ostream>
 #include <print>
 #include <stdexcept>
@@ -14,6 +16,55 @@
 
 namespace logproc {
 namespace {
+
+constexpr std::uint64_t kMinLatencyBucketUs = 1000;
+constexpr std::uint64_t kMaxLatencyBucketUs = 100'000'000;
+constexpr std::size_t kLatencyBucketCount = 64;
+
+std::uint64_t bucketUpperBound(std::uint64_t latencyUs) {
+    if (latencyUs <= kMinLatencyBucketUs) {
+        return kMinLatencyBucketUs;
+    }
+
+    double upper = static_cast<double>(kMinLatencyBucketUs);
+    for (std::size_t i = 0; i < kLatencyBucketCount; ++i) {
+        if (latencyUs <= static_cast<std::uint64_t>(std::ceil(upper))) {
+            return static_cast<std::uint64_t>(std::ceil(upper));
+        }
+        upper *= 1.1;
+        if (upper > kMaxLatencyBucketUs) {
+            return kMaxLatencyBucketUs;
+        }
+    }
+    return kMaxLatencyBucketUs;
+}
+
+std::pair<std::uint64_t, std::uint64_t> percentileRange(const std::map<std::uint64_t, std::uint64_t>& histogram,
+                                                     std::uint64_t percentile) {
+    if (histogram.empty()) {
+        return {0, 0};
+    }
+
+    const std::uint64_t total = std::accumulate(histogram.begin(), histogram.end(), std::uint64_t{0},
+                                               [](std::uint64_t sum, const auto& entry) {
+                                                   return sum + entry.second;
+                                               });
+    if (total == 0) {
+        return {0, 0};
+    }
+
+    const std::uint64_t target = std::max<std::uint64_t>(1, (total * percentile + 99) / 100);
+    std::uint64_t seen = 0;
+    for (const auto& [upper, count] : histogram) {
+        seen += count;
+        if (seen >= target) {
+            const auto lower = upper == kMinLatencyBucketUs ? 0 : static_cast<std::uint64_t>(std::ceil(static_cast<double>(upper) / 1.1));
+            return {lower, upper};
+        }
+    }
+
+    return {histogram.rbegin()->first / 2, histogram.rbegin()->first};
+}
 
 std::string normalizePath(std::string_view path) {
     const auto queryPos = path.find('?');
@@ -77,6 +128,7 @@ void Stats::addLine(std::string_view line) {
     ++parsed;
     ++byStatus[record.status];
     ++byEndpoint[normalizePath(record.path)];
+    ++latencyHistogram[bucketUpperBound(record.latencyUs)];
     const auto minuteKey = std::chrono::floor<std::chrono::minutes>(record.timestamp)
                               .time_since_epoch()
                               .count();
@@ -101,6 +153,9 @@ void Stats::merge(const Stats& other) {
     }
     for (const auto& [minute, count] : other.byMinute) {
         byMinute[minute] += count;
+    }
+    for (const auto& [upper, count] : other.latencyHistogram) {
+        latencyHistogram[upper] += count;
     }
     totalBytes += other.totalBytes;
     totalLatencyUs += other.totalLatencyUs;
@@ -201,6 +256,14 @@ void printReport(std::ostream& out, const Stats& stats) {
         }
     }
     
+
+    if (!stats.latencyHistogram.empty()) {
+        const auto p95 = percentileRange(stats.latencyHistogram, 95);
+        const auto p99 = percentileRange(stats.latencyHistogram, 99);
+        std::println(out, "\nPercentiles (approx.):");
+        std::println(out, "  p95: {}us - {}us", p95.first, p95.second);
+        std::println(out, "  p99: {}us - {}us", p99.first, p99.second);
+    }
 
     if (!stats.byEndpoint.empty()) {
         std::vector<std::pair<std::string, std::uint64_t>> endpoints(stats.byEndpoint.begin(), stats.byEndpoint.end());
