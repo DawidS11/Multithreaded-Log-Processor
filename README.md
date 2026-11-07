@@ -80,22 +80,22 @@ LOGPROC_MODE=single ./build/bin/logproc access.log
 - `build/` and `build-tsan/` are generated and ignored by git.
 
 ## Results
-10'000'000 logs, average across 5 runs:
+10'000'000 logs, average across 5 runs, input size 811 MiB:
 
-| Mode | Workers | Batch size | Average time (s) | Speedup vs single-threaded |
-|---|---:|---:|---:|---:|
-| Single-threaded | — | — | 2.740 | 1.00x |
-| Threaded | 1 | 100 | 2.638 | 1.04x |
-| Threaded | 2 | 100 | 1.359 | 2.01x |
-| Threaded | 4 | 100 | 1.001 | 2.74x |
-| Threaded | 8 | 100 | 1.212 | 2.26x |
-| Threaded | 1 | 1000 | 2.218 | 1.23x |
-| Threaded | 2 | 1000 | 1.266 | 2.16x |
-| Threaded | 4 | 1000 | 0.857 | 3.20x |
-| Threaded | 8 | 1000 | 0.812 | 3.37x |
-| Threaded | 1 | 10000 | 2.181 | 1.26x |
-| Threaded | 2 | 10000 | 1.102 | 2.49x |
-| Threaded | 4 | 10000 | 0.813 | 3.37x |
-| Threaded | 8 | 10000 | 0.732 | 3.74x |
+| Mode | Workers | Batch size | Average time (s) | Throughput (MiB/s) | Speedup vs single-threaded |
+|---|---:|---:|---:|---:|---:|
+| Single-threaded without batches | — | — | 2.740 | 296.0 | 1.00x |
+| Multi-threaded with batches | 1 | 100 | 2.638 | 307.4 | 1.04x |
+| Multi-threaded with batches | 2 | 100 | 1.359 | 596.6 | 2.01x |
+| Multi-threaded with batches | 4 | 100 | 1.001 | 810.2 | 2.74x |
+| Multi-threaded with batches | 8 | 100 | 1.212 | 669.3 | 2.26x |
+| Multi-threaded with batches | 1 | 1000 | 2.218 | 365.6 | 1.23x |
+| Multi-threaded with batches | 2 | 1000 | 1.266 | 640.5 | 2.16x |
+| Multi-threaded with batches | 4 | 1000 | 0.857 | 946.5 | 3.20x |
+| Multi-threaded with batches | 8 | 1000 | 0.812 | 998.8 | 3.37x |
+| Multi-threaded with batches | 1 | 10000 | 2.181 | 371.7 | 1.26x |
+| Multi-threaded with batches | 2 | 10000 | 1.102 | 735.9 | 2.49x |
+| Multi-threaded with batches | 4 | 10000 | 0.813 | 997.5 | 3.37x |
+| Multi-threaded with batches | 8 | 10000 | 0.732 | 1108.2 | 3.74x |
 
-The best average result is the 8-worker configuration with a batch size of 10,000, at 0.732 s, which is about 3.74x faster than the single-threaded baseline.
+The best average result is the 8-worker configuration with a batch size of 10,000, at 0.732 s and about 1,108 MiB/s, which is about 3.74x faster than the single-threaded baseline.
