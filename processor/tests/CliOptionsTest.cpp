@@ -39,9 +39,9 @@ TEST(CliOptionsTest, RejectsZeroBatchSize) {
 }
 
 TEST(CliOptionsTest, RejectsZeroWorkers) {
-    const auto r = parseCliArgs({"--workers", "0", "access.log"});
+    const auto r = parseCliArgs({"access.log", "--workers", "0"});
     ASSERT_FALSE(r.has_value());
-    EXPECT_NE(r.error().find("invalid worker count"), std::string::npos);
+    EXPECT_NE(r.error().find("invalid value '0' for --workers"), std::string::npos);
 }
 
 TEST(CliOptionsTest, RejectsNonNumericWorkers) {
