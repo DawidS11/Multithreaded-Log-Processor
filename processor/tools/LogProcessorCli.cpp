@@ -39,9 +39,13 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    std::println(std::cout, "XXX '{}'", numWorkers);
+    const auto start = std::chrono::steady_clock::now();
 
     const auto stats = logproc::analyze(in, numWorkers);
     logproc::printReport(std::cout, stats);
+
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    std::println(std::cerr, "{} workers: {:.3f} s", numWorkers,
+             std::chrono::duration<double>(elapsed).count());
     return 0;
 }
