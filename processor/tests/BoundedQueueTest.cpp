@@ -2,10 +2,12 @@
 
 #include <gtest/gtest.h>
 
-#include <string>
-#include <memory>
+#include <algorithm>
 #include <atomic>
+#include <memory>
+#include <string>
 #include <thread>
+#include <vector>
 
 using namespace std::chrono_literals;
 
@@ -88,4 +90,47 @@ TEST(BoundedQueueTest, MoveOnlyItemsAreAccepted) {
     auto item = q.pop();
     ASSERT_TRUE(item.has_value());
     EXPECT_EQ(**item, 7);
+}
+
+TEST(BoundedQueueStressTest, EveryItemDeliveredExactlyOnce) {
+    constexpr int kProducers = 4;
+    constexpr int kConsumers = 4;
+    constexpr int kPerProducer = 10'000;
+
+    // Declared first, so it outlives the threads that use it.
+    BoundedQueue<int> q{8};
+    std::vector<std::vector<int>> received(kConsumers);
+
+    std::vector<std::jthread> consumers;
+    for (int c = 0; c < kConsumers; ++c) {
+        consumers.emplace_back([&q, &mine = received[c]] {
+            while (auto item = q.pop()) {
+                mine.push_back(*item);
+            }
+        });
+    }
+
+    std::vector<std::jthread> producers;
+    for (int p = 0; p < kProducers; ++p) {
+        producers.emplace_back([&q, p] {
+            for (int i = 0; i < kPerProducer; ++i) {
+                EXPECT_TRUE(q.push(p * kPerProducer + i));
+            }
+        });
+    }
+
+    producers.clear();  // wait until every item has been pushed
+    q.close();          // consumers drain what is left, then exit
+    consumers.clear();
+
+    std::vector<int> all;
+    for (const auto& v : received) {
+        all.insert(all.end(), v.begin(), v.end());
+    }
+    std::sort(all.begin(), all.end());
+
+    ASSERT_EQ(all.size(), kProducers * kPerProducer);
+    for (int i = 0; i < static_cast<int>(all.size()); ++i) {
+        ASSERT_EQ(all[i], i) << "missing or duplicated item near " << i;
+    }
 }
