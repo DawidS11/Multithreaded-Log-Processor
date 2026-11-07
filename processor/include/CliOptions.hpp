@@ -11,6 +11,7 @@ namespace logproc {
 struct CliOptions {
     std::string path;
     std::size_t workers = std::thread::hardware_concurrency();
+    std::size_t batchSize = 1000;
 };
 
 // Parses the arguments after the program name. Accepts --workers before or after the file.

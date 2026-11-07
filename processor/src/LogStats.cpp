@@ -47,11 +47,10 @@ void Stats::merge(const Stats& other) {
     maxLatencyUs = std::max(maxLatencyUs, other.maxLatencyUs);
 }
 
-Stats analyze(std::istream& in, std::size_t workerCount) {
+Stats analyze(std::istream& in, const std::size_t workerCount, const std::size_t batchSize) {
     if (workerCount == 0) {
         throw std::invalid_argument{"workerCount must be at least 1"};
     }
-    constexpr std::size_t kBatchSize = 1000;
     BoundedQueue<std::vector<std::string>> queue{workerCount * 2};
     // One Stats per worker, sized before any thread starts. The workers hold references
     // into this vector, so it must never resize while they run.
@@ -70,25 +69,25 @@ Stats analyze(std::istream& in, std::size_t workerCount) {
     }
 
     std::vector<std::string> batch;
-    batch.reserve(kBatchSize);
+    batch.reserve(batchSize);
     auto pushBatch = [&] {
         if (!queue.push(std::move(batch))) {
             throw std::logic_error("queue rejected a batch");
         }
         // The moved-from vector is valid but empty-ish. Clear it to be sure.
         batch.clear();
-        batch.reserve(kBatchSize);
+        batch.reserve(batchSize);
     };
 
     // Main thread creates batches and pushes them to the queue.
     try {
         for (std::string line; std::getline(in, line);) {
             batch.push_back(std::move(line));
-            if (batch.size() == kBatchSize) {
+            if (batch.size() == batchSize) {
                 pushBatch();
             }
         }
-        // The last batch is usually smaller than kBatchSize.
+        // The last batch is usually smaller than batchSize.
         if (!batch.empty()) {
             pushBatch();
         }

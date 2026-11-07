@@ -30,7 +30,8 @@ struct Stats {
 
 // Reads every line from the stream and returns the totals.
 // Parses on workerCount threads, each with its own Stats, then merges them.
-Stats analyze(std::istream& in, std::size_t workerCount = 1);
+Stats analyze(std::istream& in, const std::size_t workerCount = 1,
+              const std::size_t batchSize = 1000);
 
 // Reads every line from the stream and returns the totals.
 // Processes line by line with one thread.

@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
     const auto parsed = logproc::parseCliArgs(args);
     if (!parsed) {
         std::println(std::cerr, "logproc: {}", parsed.error());
-        std::println(std::cerr, "usage: logproc [--workers N] <access.log>");
+        std::println(std::cerr, "usage: logproc <access.log> [--workers <n>] [--batch <m>]");
         return 2;
     }
 
@@ -32,15 +32,16 @@ int main(int argc, char* argv[]) {
 
     const auto stats = isSingleMode
         ? logproc::analyzeWithoutThreads(in)
-        : logproc::analyze(in, parsed->workers);
+        : logproc::analyze(in, parsed->workers, parsed->batchSize);
 
     const auto elapsed = std::chrono::steady_clock::now() - start;
     if (isSingleMode) {
         std::println(std::cerr, "Single-threaded mode: {:.3f} s",
             std::chrono::duration<double>(elapsed).count());
     } else {
-        std::println(std::cerr, "Threaded mode, {} workers: {:.3f} s", parsed->workers,
-            std::chrono::duration<double>(elapsed).count());
+        std::println(std::cerr, "Threaded mode, {} workers, batch size={}: {:.3f} s",
+                     parsed->workers, parsed->batchSize,
+                     std::chrono::duration<double>(elapsed).count());
     }
 
     logproc::printReport(std::cout, stats);

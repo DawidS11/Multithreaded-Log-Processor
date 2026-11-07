@@ -35,5 +35,5 @@ gtest_discover_tests(cli_tests)
 
 # End-to-end smoke test.
 add_test(NAME logproc_smoke
-  COMMAND sh -c "\"$<TARGET_FILE:loggen>\" 20000 > smoke.log && \"$<TARGET_FILE:logproc>\" --workers 2 smoke.log"
+  COMMAND sh -c "\"$<TARGET_FILE:loggen>\" 20000 > smoke.log && \"$<TARGET_FILE:logproc>\" smoke.log --workers 2"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})

@@ -23,11 +23,19 @@ TEST(CliOptionsTest, WorkersAfterFile) {
     EXPECT_EQ(r->workers, 4u);
 }
 
-TEST(CliOptionsTest, WorkersBeforeFile) {
-    const auto r = parseCliArgs({"--workers", "8", "access.log"});
+TEST(CliOptionsTest, BatchAfterWorkers) {
+    const auto r = parseCliArgs({"access.log", "--workers", "4", "--batch", "500"});
     ASSERT_TRUE(r.has_value());
-    EXPECT_EQ(r->path, "access.log");
-    EXPECT_EQ(r->workers, 8u);
+    EXPECT_EQ(r->workers, 4u);
+    EXPECT_EQ(r->batchSize, 500u);
+}
+
+TEST(CliOptionsTest, RejectsOptionBeforeFile) {
+    EXPECT_FALSE(parseCliArgs({"--workers", "8", "access.log"}).has_value());
+}
+
+TEST(CliOptionsTest, RejectsZeroBatchSize) {
+    EXPECT_FALSE(parseCliArgs({"access.log", "--batch", "0"}).has_value());
 }
 
 TEST(CliOptionsTest, RejectsZeroWorkers) {
@@ -58,5 +66,5 @@ TEST(CliOptionsTest, RejectsTwoFiles) {
 }
 
 TEST(CliOptionsTest, RejectsUnknownOption) {
-    EXPECT_FALSE(parseCliArgs({"--verbose", "access.log"}).has_value());
+    EXPECT_FALSE(parseCliArgs({"access.log", "--verbose"}).has_value());
 }
