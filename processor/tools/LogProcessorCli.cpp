@@ -17,6 +17,6 @@ int main(int argc, char* argv[]) {
     }
 
     const auto stats = logproc::analyze(in);
-    logproc::print_report(std::cout, stats);
+    logproc::printReport(std::cout, stats);
     return 0;
 }

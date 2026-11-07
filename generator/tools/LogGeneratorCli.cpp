@@ -3,7 +3,6 @@
 #include <charconv>
 #include <iostream>
 #include <print>
-#include <string_view>
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -22,6 +21,6 @@ int main(int argc, char* argv[]) {
     }
 
     std::ios::sync_with_stdio(false);
-    logproc::generate_log(std::cout, opts);
+    logproc::generateLog(std::cout, opts);
     return 0;
 }

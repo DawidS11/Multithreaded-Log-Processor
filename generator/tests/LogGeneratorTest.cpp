@@ -21,7 +21,7 @@ const std::regex kLineRe(
     R"(^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) - - \[(\d{2}/[A-Z][a-z]{2}/\d{4}:\d{2}:\d{2}:\d{2}) \+0000\] )"
     R"("(GET|POST|PUT|DELETE) (\S+) HTTP/1\.1" (\d{3}) (\d+) (\d+)$)");
 
-std::vector<std::string> split_lines(const std::string& text) {
+std::vector<std::string> splitLines(const std::string& text) {
     std::vector<std::string> lines;
     std::istringstream in{text};
     for (std::string line; std::getline(in, line);) {
@@ -32,7 +32,7 @@ std::vector<std::string> split_lines(const std::string& text) {
 
 std::string generate(std::uint64_t lines) {
     std::ostringstream out;
-    logproc::generate_log(out, {.lines = lines, .start = kStart});
+    logproc::generateLog(out, {.lines = lines, .start = kStart});
     return out.str();
 }
 
@@ -43,7 +43,7 @@ TEST(LogGenTest, ZeroLinesProducesEmptyOutput) {
 }
 
 TEST(LogGenTest, WritesExactlyTheRequestedNumberOfLines) {
-    EXPECT_EQ(split_lines(generate(500)).size(), 500u);
+    EXPECT_EQ(splitLines(generate(500)).size(), 500u);
 }
 
 TEST(LogGenTest, RepeatedRunsProduceIdenticalOutput) {
@@ -51,13 +51,13 @@ TEST(LogGenTest, RepeatedRunsProduceIdenticalOutput) {
 }
 
 TEST(LogGenTest, FirstLineHasStartTimestamp) {
-    const auto lines = split_lines(generate(1));
+    const auto lines = splitLines(generate(1));
     ASSERT_EQ(lines.size(), 1u);
     EXPECT_NE(lines[0].find("[24/Oct/2026:10:15:32 +0000]"), std::string::npos) << lines[0];
 }
 
 TEST(LogGenTest, TimestampAdvancesOneSecondPerLine) {
-    const auto lines = split_lines(generate(3));
+    const auto lines = splitLines(generate(3));
     ASSERT_EQ(lines.size(), 3u);
     EXPECT_NE(lines[0].find(":32 +0000]"), std::string::npos) << lines[0];
     EXPECT_NE(lines[1].find(":33 +0000]"), std::string::npos) << lines[1];
@@ -65,7 +65,7 @@ TEST(LogGenTest, TimestampAdvancesOneSecondPerLine) {
 }
 
 TEST(LogGenTest, EveryLineMatchesApacheStyleFormat) {
-    for (const auto& line : split_lines(generate(1000))) {
+    for (const auto& line : splitLines(generate(1000))) {
         std::smatch m;
         ASSERT_TRUE(std::regex_match(line, m, kLineRe)) << "bad line: " << line;
     }
@@ -74,7 +74,7 @@ TEST(LogGenTest, EveryLineMatchesApacheStyleFormat) {
 TEST(LogGenTest, FieldsAreInExpectedRanges) {
     const std::set<int> allowed{200, 201, 301, 404, 500};
 
-    for (const auto& line : split_lines(generate(1000))) {
+    for (const auto& line : splitLines(generate(1000))) {
         std::smatch m;
         ASSERT_TRUE(std::regex_match(line, m, kLineRe)) << line;
 
@@ -89,7 +89,7 @@ TEST(LogGenTest, FieldsAreInExpectedRanges) {
 
 TEST(LogGenTest, AllStatusCodesAppear) {
     std::set<int> seen;
-    for (const auto& line : split_lines(generate(100))) {
+    for (const auto& line : splitLines(generate(100))) {
         std::smatch m;
         ASSERT_TRUE(std::regex_match(line, m, kLineRe));
         seen.insert(std::stoi(m[5]));
@@ -98,7 +98,7 @@ TEST(LogGenTest, AllStatusCodesAppear) {
 }
 
 TEST(LogGenTest, LineGeneratorMatchesGenerateLog) {
-    const auto lines = split_lines(generate(10));
+    const auto lines = splitLines(generate(10));
 
     logproc::LineGenerator gen{kStart};
     for (const auto& expected : lines) {

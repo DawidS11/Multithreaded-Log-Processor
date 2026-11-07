@@ -8,10 +8,10 @@
 
 namespace logproc {
 
-void Stats::add_line(std::string_view line) {
+void Stats::addLine(std::string_view line) {
     ++lines;
 
-    const auto result = parse_line(line);
+    const auto result = parseLine(line);
     if (!result) {
         ++malformed;
         ++errors[result.error()];
@@ -20,10 +20,10 @@ void Stats::add_line(std::string_view line) {
 
     const LogRecord& record = *result;
     ++parsed;
-    ++by_status[record.status];
-    total_bytes += record.bytes;
-    total_latency_us += record.latency_us;
-    max_latency_us = std::max(max_latency_us, record.latency_us);
+    ++byStatus[record.status];
+    totalBytes += record.bytes;
+    totalLatencyUs += record.latencyUs;
+    maxLatencyUs = std::max(maxLatencyUs, record.latencyUs);
 }
 
 Stats analyze(std::istream& in) {
@@ -45,7 +45,7 @@ Stats analyze(std::istream& in) {
         // The same thread pops from the queue and adds line.
         auto ready = queue.pop();
         for (const auto& line : *ready) {
-            stats.add_line(line);
+            stats.addLine(line);
         }
     };
 
@@ -65,27 +65,27 @@ Stats analyze(std::istream& in) {
     return stats;
 }
 
-void print_report(std::ostream& out, const Stats& stats) {
+void printReport(std::ostream& out, const Stats& stats) {
     std::println(out, "Lines read:       {}", stats.lines);
     std::println(out, "Parsed:           {}", stats.parsed);
     std::println(out, "Malformed:        {}", stats.malformed);
 
     if (stats.parsed > 0) {
-        const double avg_ms = stats.total_latency_us / 1000.0 / static_cast<double>(stats.parsed);
-        std::println(out, "Total bytes:      {}", stats.total_bytes);
-        std::println(out, "Average latency:  {:.2f} ms", avg_ms);
-        std::println(out, "Max latency:      {:.2f} ms", stats.max_latency_us / 1000.0);
+        const double avgMs = stats.totalLatencyUs / 1000.0 / static_cast<double>(stats.parsed);
+        std::println(out, "Total bytes:      {}", stats.totalBytes);
+        std::println(out, "Average latency:  {:.2f} ms", avgMs);
+        std::println(out, "Max latency:      {:.2f} ms", stats.maxLatencyUs / 1000.0);
     }
 
     std::println(out, "\nStatus codes:");
-    for (const auto& [status, count] : stats.by_status) {
+    for (const auto& [status, count] : stats.byStatus) {
         std::println(out, "  {:>3}  {}", status, count);
     }
 
     if (!stats.errors.empty()) {
         std::println(out, "\nMalformed lines by reason:");
         for (const auto& [error, count] : stats.errors) {
-            std::println(out, "  {:<14} {}", to_string(error), count);
+            std::println(out, "  {:<14} {}", toString(error), count);
         }
     }
 }
