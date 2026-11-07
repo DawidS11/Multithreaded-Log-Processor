@@ -60,7 +60,7 @@ A clean run prints no `WARNING: ThreadSanitizer` messages. TSan runs several tim
 ```bash
 cmake --build --preset default
 ./build/bin/loggen 100000 > access.log
-./build/bin/logproc access.log
+./build/bin/logproc access.log --workers 2 --batch 100
 ```
 
 The processor can be run in either threaded or single-threaded mode from the terminal without rebuilding:

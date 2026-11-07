@@ -91,3 +91,26 @@ TEST(LogStatsPipelineTest, GroupsRequestsByMinute) {
     EXPECT_EQ(it2->second, 1u);
     EXPECT_EQ(it3->second, 1u);
 }
+
+TEST(LogStatsPipelineTest, NormalizesNumericPathSegments) {
+    std::istringstream in{
+        R"(10.0.0.1 - - [24/Oct/2026:10:15:32 +0000] "GET /users/42 HTTP/1.1" 200 10 100
+10.0.0.2 - - [24/Oct/2026:10:15:59 +0000] "GET /users/99 HTTP/1.1" 200 10 100
+10.0.0.3 - - [24/Oct/2026:10:16:00 +0000] "GET /users/42/profile HTTP/1.1" 200 10 100
+10.0.0.4 - - [24/Oct/2026:10:17:30 +0000] "GET /users/42?expand=true HTTP/1.1" 200 10 100
+10.0.0.5 - - [24/Oct/2026:10:17:45 +0000] "GET /health HTTP/1.1" 200 10 100
+)"};
+
+    const auto stats = logproc::analyzeWithoutThreads(in);
+
+    const auto usersIt = stats.byEndpoint.find("/users/:id");
+    const auto profileIt = stats.byEndpoint.find("/users/:id/profile");
+    const auto healthIt = stats.byEndpoint.find("/health");
+
+    ASSERT_NE(usersIt, stats.byEndpoint.end());
+    ASSERT_NE(profileIt, stats.byEndpoint.end());
+    ASSERT_NE(healthIt, stats.byEndpoint.end());
+    EXPECT_EQ(usersIt->second, 3u);
+    EXPECT_EQ(profileIt->second, 1u);
+    EXPECT_EQ(healthIt->second, 1u);
+}

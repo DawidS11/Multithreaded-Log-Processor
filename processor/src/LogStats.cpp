@@ -13,6 +13,55 @@
 #include "BoundedQueue.hpp"
 
 namespace logproc {
+namespace {
+
+std::string normalizePath(std::string_view path) {
+    const auto queryPos = path.find('?');
+    const std::string_view base = queryPos == std::string_view::npos ? path : path.substr(0, queryPos);
+    if (base.empty()) {
+        return "/";
+    }
+
+    std::string normalized;
+    normalized.reserve(base.size());
+    bool seenSegment = false;
+
+    std::size_t start = 0;
+    while (start < base.size()) {
+        const std::size_t slashPos = base.find('/', start);
+        const std::string_view segment = slashPos == std::string_view::npos
+            ? base.substr(start)
+            : base.substr(start, slashPos - start);
+
+        if (!segment.empty()) {
+            if (!seenSegment) {
+                normalized.push_back('/');
+                seenSegment = true;
+            } else {
+                normalized.push_back('/');
+            }
+
+            const bool isNumeric = std::all_of(segment.begin(), segment.end(), [](unsigned char ch) {
+                return ch >= '0' && ch <= '9';
+            });
+
+            if (isNumeric) {
+                normalized += ":id";
+            } else {
+                normalized.append(segment.begin(), segment.end());
+            }
+        }
+
+        if (slashPos == std::string_view::npos) {
+            break;
+        }
+        start = slashPos + 1;
+    }
+
+    return normalized.empty() ? "/" : normalized;
+}
+
+}  // namespace
 
 void Stats::addLine(std::string_view line) {
     ++lines;
@@ -27,6 +76,7 @@ void Stats::addLine(std::string_view line) {
     const LogRecord& record = *result;
     ++parsed;
     ++byStatus[record.status];
+    ++byEndpoint[normalizePath(record.path)];
     const auto minuteKey = std::chrono::floor<std::chrono::minutes>(record.timestamp)
                               .time_since_epoch()
                               .count();
@@ -45,6 +95,9 @@ void Stats::merge(const Stats& other) {
     }
     for (const auto& [key, val] : other.byStatus) {
         byStatus[key] += val;
+    }
+    for (const auto& [path, count] : other.byEndpoint) {
+        byEndpoint[path] += count;
     }
     for (const auto& [minute, count] : other.byMinute) {
         byMinute[minute] += count;
@@ -140,10 +193,28 @@ void printReport(std::ostream& out, const Stats& stats) {
         std::println(out, "  {:>3}  {}", status, count);
     }
 
+    
     if (!stats.byMinute.empty()) {
         std::println(out, "\nRequests per minute:");
         for (const auto& [minute, count] : stats.byMinute) {
             std::println(out, "  {}  {}", minute, count);
+        }
+    }
+    
+
+    if (!stats.byEndpoint.empty()) {
+        std::vector<std::pair<std::string, std::uint64_t>> endpoints(stats.byEndpoint.begin(), stats.byEndpoint.end());
+        std::sort(endpoints.begin(), endpoints.end(), [](const auto& lhs, const auto& rhs) {
+            if (lhs.second != rhs.second) {
+                return lhs.second > rhs.second;
+            }
+            return lhs.first < rhs.first;
+        });
+
+        std::println(out, "\nTop endpoints:");
+        const auto limit = std::min<std::size_t>(10, endpoints.size());
+        for (std::size_t i = 0; i < limit; ++i) {
+            std::println(out, "  {:<30} {}", endpoints[i].first, endpoints[i].second);
         }
     }
 
