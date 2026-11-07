@@ -23,13 +23,16 @@ enum class ParseError {
     BadRequest,
     BadStatus,
     BadBytes,
+    BadReferrer,
+    BadUserAgent,
     BadLatency,
 };
 
 // Short description of an error, used in the report.
 [[nodiscard]] std::string_view toString(ParseError error) noexcept;
 
-// Parses one Apache-style line as produced by LineGenerator.
+// Parses one Apache-style access log line. Accepts the common log format with or without
+// the referrer and user agent fields, and with a trailing latency field.
 [[nodiscard]] std::expected<LogRecord, ParseError> parseLine(std::string_view line);
 
 }  // namespace logproc

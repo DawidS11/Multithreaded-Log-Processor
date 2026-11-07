@@ -117,3 +117,44 @@ TEST(LogParserTest, RejectsExtraFieldAfterLatency) {
     EXPECT_EQ(errorOf(R"(10.0.0.1 - - [24/Oct/2026:10:15:32 +0000] "GET / HTTP/1.1" 200 1024 1000 extra)"),
               ParseError::BadLatency);
 }
+
+TEST(LogParserTest, ParsesCombinedFormatWithReferrerAndUserAgent) {
+    const auto result = parseLine(
+        R"L(10.0.0.5 - - [24/Oct/2026:10:00:04 +0000] "GET /login HTTP/1.1" 500 1024 "https://example.com/" "Mozilla/5.0 (Macintosh)" 1800)L");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->path, "/login");
+    EXPECT_EQ(result->status, 500);
+    EXPECT_EQ(result->bytes, 1024u);
+    EXPECT_EQ(result->latencyUs, 1800u);
+}
+
+TEST(LogParserTest, DashBytesMeansZero) {
+    const auto result = parseLine(
+        R"L(10.0.0.5 - - [24/Oct/2026:10:00:04 +0000] "GET /static/app.js HTTP/1.1" 304 - "-" "curl/8.4.0" 900)L");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->bytes, 0u);
+    EXPECT_EQ(result->latencyUs, 900u);
+}
+
+TEST(LogParserTest, AcceptsEscapedQuotesInUserAgent) {
+    const auto result = parseLine(
+        R"L(10.0.0.5 - - [24/Oct/2026:10:00:04 +0000] "GET / HTTP/1.1" 200 1024 "-" "Agent \"quoted\"" 1000)L");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->latencyUs, 1000u);
+}
+
+TEST(LogParserTest, RejectsUnterminatedReferrer) {
+    EXPECT_EQ(errorOf(R"L(10.0.0.5 - - [24/Oct/2026:10:00:04 +0000] "GET / HTTP/1.1" 200 1024 "https://example.com 1000)L"),
+              ParseError::BadReferrer);
+}
+
+TEST(LogParserTest, RejectsUnterminatedUserAgent) {
+    EXPECT_EQ(errorOf(R"L(10.0.0.5 - - [24/Oct/2026:10:00:04 +0000] "GET / HTTP/1.1" 200 1024 "-" "curl 1000)L"),
+              ParseError::BadUserAgent);
+}
+
+TEST(LogParserTest, CombinedLineWithoutLatencyIsRejected) {
+    // Plain combined logs without %D have no latency, so they're rejected for now.
+    EXPECT_EQ(errorOf(R"L(10.0.0.5 - - [24/Oct/2026:10:00:04 +0000] "GET / HTTP/1.1" 200 1024 "-" "curl/8.4.0")L"),
+              ParseError::BadLatency);
+}

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <cstddef>
 #include <optional>
 #include <system_error>
 
@@ -82,6 +83,31 @@ std::optional<std::chrono::sys_seconds> parseTimestamp(std::string_view s) {
     return sys_days{date} + hours{*h} + minutes{*mi} + seconds{*sec};
 }
 
+// Skips one referrer or user agent field, which is either a bare "-" or a quoted string.
+// Backslash escapes inside the quotes are skipped, not decoded. Consumes the field and
+// the space after it, if there is one.
+std::expected<void, ParseError> skipQuotedField(std::string_view& s, ParseError onError) {
+    if (s.starts_with("- ")) {
+        s.remove_prefix(2);
+        return {};
+    }
+    if (!s.starts_with('"')) {
+        return std::unexpected(onError);
+    }
+
+    std::size_t i = 1;
+    while (i < s.size() && s[i] != '"') {
+        i += (s[i] == '\\') ? 2 : 1;
+    }
+
+    // No closing quote, or a closing quote followed by something other than a space.
+    if (i >= s.size() || (i + 1 < s.size() && s[i + 1] != ' ')) {
+        return std::unexpected(onError);
+    }
+    s.remove_prefix(std::min(i + 2, s.size()));
+    return {};
+}
+
 }  // namespace
 
 std::string_view toString(ParseError error) noexcept {
@@ -91,13 +117,17 @@ std::string_view toString(ParseError error) noexcept {
         case ParseError::BadRequest:    return "bad request";
         case ParseError::BadStatus:     return "bad status";
         case ParseError::BadBytes:      return "bad bytes";
+        case ParseError::BadReferrer:   return "bad referrer";
+        case ParseError::BadUserAgent:  return "bad user agent";
         case ParseError::BadLatency:    return "bad latency";
     }
     return "unknown";
 }
 
 std::expected<LogRecord, ParseError> parseLine(std::string_view line) {
-    // Line example:
+    // Combined format:
+    // 10.0.0.5 - - [24/Oct/2025:10:00:04 +0000] "GET /login HTTP/1.1" 500 1024 "https://example.com/" "Mozilla/5.0 (Macintosh)" 1800
+    // Generator format, without referrer or user agent:
     // 10.0.0.5 - - [24/Oct/2025:10:00:04 +0000] "GET /login HTTP/1.1" 500 1024 1800
 
     LogRecord record;
@@ -142,7 +172,7 @@ std::expected<LogRecord, ParseError> parseLine(std::string_view line) {
     record.method = std::string{*method};
     record.path = std::string{*path};
 
-    // Remaining fields: " STATUS BYTES LATENCY"
+    // Remaining fields: " STATUS BYTES ..."
     if (!line.starts_with(' ')) {
         return std::unexpected(ParseError::MissingField);
     }
@@ -162,11 +192,26 @@ std::expected<LogRecord, ParseError> parseLine(std::string_view line) {
     if (!bytesText) {
         return std::unexpected(ParseError::MissingField);
     }
-    const auto bytes = parseInteger<std::uint32_t>(*bytesText);
-    if (!bytes) {
-        return std::unexpected(ParseError::BadBytes);
+    if (*bytesText == "-") {
+        record.bytes = 0;  // Apache writes "-" when no body was sent, such as a 304
+    } else {
+        const auto bytes = parseInteger<std::uint32_t>(*bytesText);
+        if (!bytes) {
+            return std::unexpected(ParseError::BadBytes);
+        }
+        record.bytes = *bytes;
     }
-    record.bytes = *bytes;
+
+    // Combined format: referrer and user agent come before the latency.
+    // They're validated and then skipped, since nothing reads them yet.
+    if (line.starts_with('"') || line.starts_with("- ")) {
+        if (auto referrer = skipQuotedField(line, ParseError::BadReferrer); !referrer) {
+            return std::unexpected(referrer.error());
+        }
+        if (auto agent = skipQuotedField(line, ParseError::BadUserAgent); !agent) {
+            return std::unexpected(agent.error());
+        }
+    }
 
     // Latency is the last field, so the rest of the line must be exactly one number.
     const auto latency = parseInteger<std::uint32_t>(line);
