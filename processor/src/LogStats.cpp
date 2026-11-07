@@ -1,8 +1,14 @@
 #include "LogStats.hpp"
 
 #include <algorithm>
+#include <istream>
+#include <map>
+#include <ostream>
 #include <print>
+#include <stdexcept>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include "BoundedQueue.hpp"
 
@@ -26,43 +32,81 @@ void Stats::addLine(std::string_view line) {
     maxLatencyUs = std::max(maxLatencyUs, record.latencyUs);
 }
 
-Stats analyze(std::istream& in) {
+void Stats::merge(const Stats& other) {
+    lines += other.lines;
+    parsed += other.parsed;
+    malformed += other.malformed;
+    for (const auto& [key, val] : other.errors) {
+        errors[key] += val;
+    }
+    for (const auto& [key, val] : other.byStatus) {
+        byStatus[key] += val;
+    }
+    totalBytes += other.totalBytes;
+    totalLatencyUs += other.totalLatencyUs;
+    maxLatencyUs = std::max(maxLatencyUs, other.maxLatencyUs);
+}
+
+Stats analyze(std::istream& in, std::size_t workerCount) {
+    if (workerCount == 0) {
+        throw std::invalid_argument{"workerCount must be at least 1"};
+    }
     constexpr std::size_t kBatchSize = 1000;
-    BoundedQueue<std::vector<std::string>> queue{1};
+    BoundedQueue<std::vector<std::string>> queue{workerCount * 2};
+    // One Stats per worker, sized before any thread starts. The workers hold references
+    // into this vector, so it must never resize while they run.
+    std::vector<Stats> perWorker(workerCount);
+    std::vector<std::jthread> workers;
+    workers.reserve(workerCount);
+
+    for (std::size_t i = 0; i < workerCount; ++i) {
+        workers.emplace_back([&queue, &stats = perWorker[i]] {
+            while (auto batch = queue.pop()) {
+                for (const auto& line : *batch) {
+                    stats.addLine(line);
+                }
+            }
+        });
+    }
+
     std::vector<std::string> batch;
     batch.reserve(kBatchSize);
-    Stats stats;
-
-    // Send the current batch through the queue, then process it.
-    auto flush = [&]() {
+    auto pushBatch = [&] {
         if (!queue.push(std::move(batch))) {
             throw std::logic_error("queue rejected a batch");
         }
         // The moved-from vector is valid but empty-ish. Clear it to be sure.
         batch.clear();
         batch.reserve(kBatchSize);
-
-        // The same thread pops from the queue and adds line.
-        auto ready = queue.pop();
-        for (const auto& line : *ready) {
-            stats.addLine(line);
-        }
     };
 
-    for (std::string line; std::getline(in, line);) {
-        batch.push_back(std::move(line));
-        if (batch.size() == kBatchSize) {
-            flush();
+    // Main thread creates batches and pushes them to the queue.
+    try {
+        for (std::string line; std::getline(in, line);) {
+            batch.push_back(std::move(line));
+            if (batch.size() == kBatchSize) {
+                pushBatch();
+            }
         }
-    }
-    // The last batch is usually smaller than kBatchSize.
-    if (!batch.empty()) {
-        flush();
+        // The last batch is usually smaller than kBatchSize.
+        if (!batch.empty()) {
+            pushBatch();
+        }
+    } catch (...) {
+        queue.close();
+        throw;
     }
 
     queue.close();
+    // Join every worker.
+    workers.clear();
 
-    return stats;
+    Stats total;
+    for (const auto& s : perWorker) {
+        total.merge(s);
+    }
+
+    return total;
 }
 
 void printReport(std::ostream& out, const Stats& stats) {

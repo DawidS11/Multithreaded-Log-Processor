@@ -23,10 +23,14 @@ struct Stats {
 
     // Parses one line and updates the totals.
     void addLine(std::string_view line);
+
+    // Merge per-worked stats.
+    void merge(const Stats& other);
 };
 
-// Reads every line from the stream and returns the totals. Single-threaded.
-Stats analyze(std::istream& in);
+// Reads every line from the stream and returns the totals.
+// Parses on workerCount threads, each with its own Stats, then merges them.
+Stats analyze(std::istream& in, std::size_t workerCount = 1);
 
 // Writes a human-readable summary.
 void printReport(std::ostream& out, const Stats& stats);
