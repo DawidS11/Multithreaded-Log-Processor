@@ -17,3 +17,8 @@ add_executable(queue_tests tests/BoundedQueueTest.cpp)
 target_include_directories(queue_tests PRIVATE include)
 target_link_libraries(queue_tests PRIVATE GTest::gtest_main Threads::Threads)
 gtest_discover_tests(queue_tests)
+
+# LogStats tests
+add_executable(pipeline_tests tests/LogStatsTest.cpp)
+target_link_libraries(pipeline_tests PRIVATE logproc_core logproc_gen GTest::gtest_main Threads::Threads)
+gtest_discover_tests(pipeline_tests)
