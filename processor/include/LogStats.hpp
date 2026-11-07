@@ -2,7 +2,6 @@
 
 #include "LogParser.hpp"
 
-#include <chrono>
 #include <cstdint>
 #include <istream>
 #include <map>
