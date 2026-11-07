@@ -27,6 +27,10 @@ void Stats::addLine(std::string_view line) {
     const LogRecord& record = *result;
     ++parsed;
     ++byStatus[record.status];
+    const auto minuteKey = std::chrono::floor<std::chrono::minutes>(record.timestamp)
+                              .time_since_epoch()
+                              .count();
+    ++byMinute[minuteKey];
     totalBytes += record.bytes;
     totalLatencyUs += record.latencyUs;
     maxLatencyUs = std::max(maxLatencyUs, record.latencyUs);
@@ -41,6 +45,9 @@ void Stats::merge(const Stats& other) {
     }
     for (const auto& [key, val] : other.byStatus) {
         byStatus[key] += val;
+    }
+    for (const auto& [minute, count] : other.byMinute) {
+        byMinute[minute] += count;
     }
     totalBytes += other.totalBytes;
     totalLatencyUs += other.totalLatencyUs;
@@ -131,6 +138,13 @@ void printReport(std::ostream& out, const Stats& stats) {
     std::println(out, "\nStatus codes:");
     for (const auto& [status, count] : stats.byStatus) {
         std::println(out, "  {:>3}  {}", status, count);
+    }
+
+    if (!stats.byMinute.empty()) {
+        std::println(out, "\nRequests per minute:");
+        for (const auto& [minute, count] : stats.byMinute) {
+            std::println(out, "  {}  {}", minute, count);
+        }
     }
 
     if (!stats.errors.empty()) {

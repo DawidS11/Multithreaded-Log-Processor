@@ -57,3 +57,37 @@ TEST(LogStatsPipelineTest, CountsMalformedLineAcrossWorkers) {
     EXPECT_EQ(stats.parsed, kLines);
     EXPECT_EQ(stats.malformed, 1u);
 }
+
+TEST(LogStatsPipelineTest, GroupsRequestsByMinute) {
+    std::istringstream in{
+        R"(10.0.0.1 - - [24/Oct/2026:10:15:32 +0000] "GET /one HTTP/1.1" 200 10 100
+10.0.0.2 - - [24/Oct/2026:10:15:59 +0000] "GET /two HTTP/1.1" 200 10 100
+10.0.0.3 - - [24/Oct/2026:10:16:00 +0000] "GET /three HTTP/1.1" 200 10 100
+10.0.0.4 - - [24/Oct/2026:10:17:30 +0000] "GET /four HTTP/1.1" 200 10 100
+)"};
+
+    const auto stats = logproc::analyzeWithoutThreads(in);
+
+    EXPECT_EQ(stats.byMinute.size(), 3u);
+
+    const auto minute1 = std::chrono::floor<std::chrono::minutes>(
+        std::chrono::sys_days{std::chrono::year{2026} / std::chrono::month{10} / std::chrono::day{24}} +
+        std::chrono::hours{10} + std::chrono::minutes{15});
+    const auto minute2 = std::chrono::floor<std::chrono::minutes>(
+        std::chrono::sys_days{std::chrono::year{2026} / std::chrono::month{10} / std::chrono::day{24}} +
+        std::chrono::hours{10} + std::chrono::minutes{16});
+    const auto minute3 = std::chrono::floor<std::chrono::minutes>(
+        std::chrono::sys_days{std::chrono::year{2026} / std::chrono::month{10} / std::chrono::day{24}} +
+        std::chrono::hours{10} + std::chrono::minutes{17});
+
+    const auto it1 = stats.byMinute.find(minute1.time_since_epoch().count());
+    const auto it2 = stats.byMinute.find(minute2.time_since_epoch().count());
+    const auto it3 = stats.byMinute.find(minute3.time_since_epoch().count());
+
+    ASSERT_NE(it1, stats.byMinute.end());
+    ASSERT_NE(it2, stats.byMinute.end());
+    ASSERT_NE(it3, stats.byMinute.end());
+    EXPECT_EQ(it1->second, 2u);
+    EXPECT_EQ(it2->second, 1u);
+    EXPECT_EQ(it3->second, 1u);
+}

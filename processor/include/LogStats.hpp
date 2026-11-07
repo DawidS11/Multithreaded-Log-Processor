@@ -2,6 +2,7 @@
 
 #include "LogParser.hpp"
 
+#include <chrono>
 #include <cstdint>
 #include <istream>
 #include <map>
@@ -17,6 +18,7 @@ struct Stats {
     std::uint64_t malformed = 0;   // lines that failed to parse
     std::map<ParseError, std::uint64_t> errors;       // malformed lines, by reason
     std::map<std::uint16_t, std::uint64_t> byStatus;  // parsed lines, by status code
+    std::map<std::int64_t, std::uint64_t> byMinute;  // requests grouped by minute
     std::uint64_t totalBytes = 0;
     std::uint64_t totalLatencyUs = 0;
     std::uint32_t maxLatencyUs = 0;
