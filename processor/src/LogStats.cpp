@@ -10,6 +10,9 @@ namespace logproc {
 template <typename T>
 class BoundedQueue {
 public:
+
+    explicit BoundedQueue(std::size_t capacity)
+        : capacity_{capacity} {}
     
     bool push(T batch) {
         if(data_.size() >= capacity_ || closed_) {
@@ -38,15 +41,11 @@ public:
 
 private:
     std::queue<T> data_;
-    std::size_t capacity_ = 10;
+    std::size_t capacity_;
     bool closed_ = false;
 };
 
 void Stats::add_line(std::string_view line) {
-
-    // Push to the queue here.
-    // queue.push(std::move(batch));
-
     ++lines;
 
     const auto result = parse_line(line);
@@ -65,10 +64,41 @@ void Stats::add_line(std::string_view line) {
 }
 
 Stats analyze(std::istream& in) {
+    constexpr std::size_t kBatchSize = 1000;
+    BoundedQueue<std::vector<std::string>> queue{1};
+    std::vector<std::string> batch;
+    batch.reserve(kBatchSize);
     Stats stats;
+
+    // Send the current batch through the queue, then process it.
+    auto flush = [&]() {
+        if (!queue.push(std::move(batch))) {
+            throw std::logic_error("queue rejected a batch");
+        }
+        // The moved-from vector is valid but empty-ish. Clear it to be sure.
+        batch.clear();
+        batch.reserve(kBatchSize);
+
+        // The same thread pops from the queue and adds line.
+        auto ready = queue.pop();
+        for (const auto& line : *ready) {
+            stats.add_line(line);
+        }
+    };
+
     for (std::string line; std::getline(in, line);) {
-        stats.add_line(line);
+        batch.push_back(std::move(line));
+        if (batch.size() == kBatchSize) {
+            flush();
+        }
     }
+    // The last batch is usually smaller than kBatchSize.
+    if (!batch.empty()) {
+        flush();
+    }
+
+    queue.close();
+
     return stats;
 }
 
