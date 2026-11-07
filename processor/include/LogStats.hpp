@@ -32,6 +32,10 @@ struct Stats {
 // Parses on workerCount threads, each with its own Stats, then merges them.
 Stats analyze(std::istream& in, std::size_t workerCount = 1);
 
+// Reads every line from the stream and returns the totals.
+// Processes line by line with one thread.
+Stats analyzeWithoutThreads(std::istream& in);
+
 // Writes a human-readable summary.
 void printReport(std::ostream& out, const Stats& stats);
 

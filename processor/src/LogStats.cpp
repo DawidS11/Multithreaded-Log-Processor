@@ -109,6 +109,14 @@ Stats analyze(std::istream& in, std::size_t workerCount) {
     return total;
 }
 
+Stats analyzeWithoutThreads(std::istream& in) {
+    Stats stats;
+    for (std::string line; std::getline(in, line);) {
+        stats.addLine(line);
+    }
+    return stats;
+}
+
 void printReport(std::ostream& out, const Stats& stats) {
     std::println(out, "Lines read:       {}", stats.lines);
     std::println(out, "Parsed:           {}", stats.parsed);

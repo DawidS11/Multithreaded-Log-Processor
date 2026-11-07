@@ -63,6 +63,16 @@ cmake --build --preset default
 ./build/bin/logproc access.log
 ```
 
+The processor can be run in either threaded or single-threaded mode from the terminal without rebuilding:
+
+```bash
+LOGPROC_MODE=single ./build/bin/logproc access.log
+./build/bin/logproc access.log
+```
+
+- `LOGPROC_MODE=single` selects `analyzeWithoutThreads`
+- the default path uses the threaded `analyze` implementation
+
 ### Notes
 
 - Build with the same compiler for the normal and TSan presets. Set `CXX` before configuring if you use Homebrew LLVM.
