@@ -5,7 +5,6 @@
 #include <string>
 #include <memory>
 #include <atomic>
-#include <chrono>
 #include <thread>
 
 using namespace std::chrono_literals;
@@ -66,7 +65,7 @@ TEST(BoundedQueueTest, CloseWakesBlockedPop) {
 TEST(BoundedQueueTest, PushFailsAfterClose) {
     BoundedQueue<std::string> q{3};
     q.close();
-    EXPECT_TRUE(q.closed());
+    EXPECT_TRUE(q.isClosed());
     EXPECT_FALSE(q.push("a"));
     EXPECT_EQ(q.size(), 0u);
 }
