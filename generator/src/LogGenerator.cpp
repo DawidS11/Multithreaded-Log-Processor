@@ -30,8 +30,8 @@ std::string LineGenerator::next() {
     // Use the current index for every field, then advance it.
     const std::uint64_t i = index++;
 
-    // One second per line, so timestamps increase steadily.
-    const auto timestamp = start + std::chrono::seconds{i};
+    // Hardcoded dense-rates traffic: 300,000 requests per minute (~5,000/sec).
+    const auto timestamp = start + std::chrono::seconds{i / 5000};
 
     // Client IP cycles through 10.0.0.1 to 10.0.0.254.
     const std::string ip = std::format("10.0.0.{}", i % 254 + 1);
