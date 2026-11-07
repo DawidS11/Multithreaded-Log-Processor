@@ -4,6 +4,11 @@
 
 #include <string>
 #include <memory>
+#include <atomic>
+#include <chrono>
+#include <thread>
+
+using namespace std::chrono_literals;
 
 using logproc::BoundedQueue;
 
@@ -18,26 +23,44 @@ TEST(BoundedQueueTest, PopsItemsInFirstInFirstOutOrder) {
     EXPECT_EQ(q.pop(), "c");
 }
 
-TEST(BoundedQueueTest, PopOnEmptyQueueReturnsNothing) {
+
+TEST(BoundedQueueTest, PopOnEmptyClosedQueueReturnsNothing) {
     BoundedQueue<std::string> q{3};
+    q.close();
     EXPECT_FALSE(q.pop().has_value());
 }
 
-TEST(BoundedQueueTest, PushFailsWhenFull) {
-    BoundedQueue<std::string> q{2};
-    EXPECT_TRUE(q.push("a"));
-    EXPECT_TRUE(q.push("b"));
-    EXPECT_FALSE(q.push("c"));
-    EXPECT_EQ(q.size(), 2u);
-}
-
-TEST(BoundedQueueTest, PushSucceedsAgainAfterPopMakesRoom) {
+TEST(BoundedQueueTest, PushBlocksWhenFullUntilPopMakesRoom) {
     BoundedQueue<std::string> q{1};
     ASSERT_TRUE(q.push("a"));
-    ASSERT_FALSE(q.push("b"));
 
-    EXPECT_EQ(q.pop(), "a");
-    EXPECT_TRUE(q.push("b"));
+    std::atomic<bool> pushed{false};
+    std::thread producer([&] {
+        EXPECT_TRUE(q.push("b"));
+        pushed = true;
+    });
+
+    std::this_thread::sleep_for(50ms);
+    EXPECT_FALSE(pushed);  // still blocked, because the queue is full
+
+    EXPECT_EQ(q.pop(), "a");  // makes room, which wakes the producer
+    producer.join();
+
+    EXPECT_TRUE(pushed);
+    EXPECT_EQ(q.pop(), "b");
+}
+
+TEST(BoundedQueueTest, CloseWakesBlockedPop) {
+    BoundedQueue<std::string> q{1};
+    std::optional<std::string> result = std::string{"unset"};
+
+    std::thread consumer([&] { result = q.pop(); });
+
+    std::this_thread::sleep_for(50ms);
+    q.close();  // without notify_all in close(), this join never returns
+    consumer.join();
+
+    EXPECT_FALSE(result.has_value());
 }
 
 TEST(BoundedQueueTest, PushFailsAfterClose) {

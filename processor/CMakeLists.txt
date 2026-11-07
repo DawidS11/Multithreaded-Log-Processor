@@ -1,3 +1,5 @@
+find_package(Threads REQUIRED)
+
 add_library(logproc_core src/LogParser.cpp src/LogStats.cpp)
 target_include_directories(logproc_core PUBLIC include)
 target_compile_options(logproc_core PRIVATE -Wall -Wextra -Wpedantic)
@@ -13,5 +15,5 @@ gtest_discover_tests(logparser_tests)
 # BoundedQueueTest tests
 add_executable(queue_tests tests/BoundedQueueTest.cpp)
 target_include_directories(queue_tests PRIVATE include)
-target_link_libraries(queue_tests PRIVATE GTest::gtest_main)
+target_link_libraries(queue_tests PRIVATE GTest::gtest_main Threads::Threads)
 gtest_discover_tests(queue_tests)
