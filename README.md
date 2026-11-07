@@ -1,19 +1,25 @@
-# Multithreaded-Log-Processor
-The project reads log files, parses records, processes them with a worker pool, aggregates statistics, and outputs a report.
+# Multithreaded Log Processor
 
-The core flow is a reader thread that pulls big blocks from the file and splits them into lines, grouped into batches. Those batches go into a bounded queue. A pool of worker threads takes batches, parses them, and updates its own local statistics with no shared locks. When the file ends, the workers’ results are merged into one report.
+A C++23 command-line application that generates Apache-style access logs, parses them, and reports traffic and latency statistics. The processor supports both a bounded-queue worker pool and a single-threaded mode for comparison.
 
+## Features
 
-## Testing
+- Parses Apache-style access log records with a UTC timestamp, request, status, response size, optional referrer/user-agent fields, and a trailing latency value in microseconds. The referrer and user-agent fields are either both present or both omitted.
+- Counts parsed and malformed lines, including malformed-line totals by reason.
+- Reports response bytes, average and maximum latency, counts by status code, and requests grouped by UTC minute.
+- Estimates p95 and p99 latency ranges using a fixed-size, log-spaced histogram; percentile values are approximate bucket ranges, not exact samples.
+- Counts the top ten normalized endpoints. Query strings are removed and numeric path segments are replaced with `:id` (for example, `/users/42?expand=true` becomes `/users/:id`).
+- Processes input in batches through a bounded FIFO queue. Each worker maintains its own statistics, which are merged after input is consumed.
 
-The project uses GoogleTest and CTest. Tests are discovered automatically from the build, so you only need to build and run them.
+## Build and test
 
-### Prerequisites
+### Requirements
 
-- CMake 3.25 or newer
-- A C++23 compiler
+- CMake 3.25 or newer (the project presets use CMake Presets version 6)
+- A compiler with C++23 support
+- Network access on the first configure, to fetch GoogleTest
 
-### Run the normal test suite
+Configure, build, and run the complete GoogleTest/CTest suite:
 
 ```bash
 cmake --preset default
@@ -21,25 +27,29 @@ cmake --build --preset default
 ctest --preset default --timeout 120
 ```
 
-Binaries are written to `build/bin/`. To run one test suite directly with its full output:
+Executables are placed in `build/bin/`. Test suites can also be run directly:
 
 ```bash
+./build/bin/loggen_tests
+./build/bin/logparser_tests
 ./build/bin/queue_tests
 ./build/bin/pipeline_tests
+./build/bin/cli_tests
 ```
 
-| Binary | What it checks |
+| Test binary | Coverage |
 |---|---|
-| `loggen_tests` | Log generator output format and determinism |
-| `logparser_tests` | Parsing of valid and malformed lines, and generator/parser round trip |
-| `queue_tests` | `BoundedQueue` ordering, blocking, close behavior, and a multi-producer, multi-consumer stress test |
-| `pipeline_tests` | Full analysis of 100,000 lines with several worker counts, checking identical reports |
+| `loggen_tests` | Generated line count, determinism, timestamps, format, and field ranges |
+| `logparser_tests` | Valid and malformed log records, plus generator/parser compatibility |
+| `queue_tests` | Queue ordering, blocking, close behavior, and concurrent stress behavior |
+| `pipeline_tests` | Multi-worker aggregation, malformed-line counts, minute and endpoint grouping, and latency histogram reporting |
+| `cli_tests` | Valid and invalid processor command-line arguments |
 
-The `--timeout` flag matters. A deadlock in the queue or shutdown code shows up as a test that never returns, so the timeout turns a hang into a failure.
+The CTest timeout helps turn a queue deadlock or shutdown hang into a test failure instead of an indefinitely running test.
 
-### Run the tests under ThreadSanitizer
+### ThreadSanitizer
 
-ThreadSanitizer (TSan) reports data races in multithreaded code. It has its own build, so the normal build is not affected:
+The `tsan` preset builds a separate Debug configuration with ThreadSanitizer enabled:
 
 ```bash
 cmake --preset tsan
@@ -47,40 +57,49 @@ cmake --build --preset tsan
 ctest --preset tsan --timeout 300
 ```
 
-TSan binaries are written to `build-tsan/bin/`. For the full report from the queue tests:
+TSan binaries are placed in `build-tsan/bin/`. To run the queue tests directly and stop at the first detected race:
 
 ```bash
 TSAN_OPTIONS="halt_on_error=1" ./build-tsan/bin/queue_tests
 ```
 
-A clean run prints no `WARNING: ThreadSanitizer` messages. TSan runs several times slower than a normal build, so allow more time.
+A clean run has no `WARNING: ThreadSanitizer` messages. TSan is slower than a normal build. Use the same compiler for the normal and TSan builds; set `CXX` before configuring if using Homebrew LLVM.
 
-### Run the program
+## Run the programs
+
+Generate 100,000 log lines and analyze them with four workers and batches of 1,000 lines:
 
 ```bash
-cmake --build --preset default
 ./build/bin/loggen 100000 > access.log
-./build/bin/logproc access.log --workers 2 --batch 100
+./build/bin/logproc access.log --workers 4 --batch 1000
 ```
 
-The processor can be run in either threaded or single-threaded mode from the terminal without rebuilding:
+`loggen` accepts one non-negative line count and writes the generated records to standard output. Its synthetic traffic rate is hardcoded at approximately 5,000 requests per second (300,000 per minute). Each 100-request latency cycle contains 90 fast requests (about 1–10.8 ms) and a 10-request tail spanning 10–100 ms. Latency is written in microseconds.
+
+The processor syntax is:
+
+```text
+logproc <logfile-path> [--workers <n>] [--batch <m>]
+```
+
+Both options are optional and must follow the path, each requires a positive integer. Defaults are the machine's reported hardware concurrency for `--workers` and `10000` lines for `--batch`. The timing summary is written to standard error, the analysis report is written to standard output.
+
+### Select threaded or single-threaded mode
+
+The default is the threaded worker-pool implementation. Set `LOGPROC_MODE=single` to process lines sequentially without the queue or worker threads; this does not require a separate build or command-line option:
 
 ```bash
 LOGPROC_MODE=single ./build/bin/logproc access.log
-./build/bin/logproc access.log
+./build/bin/logproc access.log --workers 4 --batch 1000
 ```
 
-- `LOGPROC_MODE=single` selects `analyzeWithoutThreads`
-- the default path uses the threaded `analyze` implementation
+### Report contents
 
-### Notes
+The report includes line/parse totals, response bytes, average and maximum latency, status-code counts, request counts by minute, approximate p95/p99 latency ranges, and the ten most frequent normalized endpoints. Requests-per-minute values are currently printed as Unix-epoch minute keys. When malformed records are present, their counts are listed by parse-error reason.
 
-- Build with the same compiler for the normal and TSan presets. Set `CXX` before configuring if you use Homebrew LLVM.
-- If you change the file layout, rerun `cmake --preset default` so the test list is regenerated.
-- `build/` and `build-tsan/` are generated and ignored by git.
+## Recorded performance results
 
-## Results
-10'000'000 logs, average across 5 runs, input size 811 MiB:
+The following measurements are the average of five runs on a 10,000,000-line input file of 811 MiB. Results depend on the machine, compiler, and input; rerun the benchmark when comparing a different environment or generated dataset.
 
 | Mode | Workers | Batch size | Average time (s) | Throughput (MiB/s) | Speedup vs single-threaded |
 |---|---:|---:|---:|---:|---:|
@@ -98,4 +117,11 @@ LOGPROC_MODE=single ./build/bin/logproc access.log
 | Multi-threaded with batches | 4 | 10000 | 0.813 | 997.5 | 3.37x |
 | Multi-threaded with batches | 8 | 10000 | 0.732 | 1108.2 | 3.74x |
 
-The best average result is the 8-worker configuration with a batch size of 10,000, at 0.732 s and about 1,108 MiB/s, which is about 3.74x faster than the single-threaded baseline.
+The best recorded average is the 8-worker configuration with a batch size of 10,000: 0.732 s, about 1,108 MiB/s, or 3.74x the single-threaded baseline.
+
+## Implementation notes
+
+- The caller thread reads the input with `std::getline`, groups lines into batches, and pushes them to a bounded queue with capacity for two batches per worker.
+- Worker threads parse their assigned batches and update worker-local statistics; the main thread merges those results after the queue is closed and the workers finish.
+- `LOGPROC_MODE=single` uses the line-by-line `analyzeWithoutThreads` path instead.
+- `build/` and `build-tsan/` are generated build directories and are ignored by Git.
