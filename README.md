@@ -78,3 +78,24 @@ LOGPROC_MODE=single ./build/bin/logproc access.log
 - Build with the same compiler for the normal and TSan presets. Set `CXX` before configuring if you use Homebrew LLVM.
 - If you change the file layout, rerun `cmake --preset default` so the test list is regenerated.
 - `build/` and `build-tsan/` are generated and ignored by git.
+
+## Results
+10'000'000 logs, average across 5 runs:
+
+| Mode | Workers | Batch size | Average time (s) | Speedup vs single-threaded |
+|---|---:|---:|---:|---:|
+| Single-threaded | — | — | 2.740 | 1.00x |
+| Threaded | 1 | 100 | 2.638 | 1.04x |
+| Threaded | 2 | 100 | 1.359 | 2.01x |
+| Threaded | 4 | 100 | 1.001 | 2.74x |
+| Threaded | 8 | 100 | 1.212 | 2.26x |
+| Threaded | 1 | 1000 | 2.218 | 1.23x |
+| Threaded | 2 | 1000 | 1.266 | 2.16x |
+| Threaded | 4 | 1000 | 0.857 | 3.20x |
+| Threaded | 8 | 1000 | 0.812 | 3.37x |
+| Threaded | 1 | 10000 | 2.181 | 1.26x |
+| Threaded | 2 | 10000 | 1.102 | 2.49x |
+| Threaded | 4 | 10000 | 0.813 | 3.37x |
+| Threaded | 8 | 10000 | 0.732 | 3.74x |
+
+The best average result is the 8-worker configuration with a batch size of 10,000, at 0.732 s, which is about 3.74x faster than the single-threaded baseline.
