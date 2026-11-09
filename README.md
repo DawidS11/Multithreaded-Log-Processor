@@ -1,5 +1,7 @@
 # Multithreaded Log Processor
 
+(in progress)
+
 A C++23 command-line application that generates Apache-style access logs, parses them, and reports traffic and latency statistics. The processor supports both a bounded-queue worker pool and a single-threaded mode for comparison.
 
 ## Features
